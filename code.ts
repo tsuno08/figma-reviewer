@@ -1,12 +1,16 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, InlineDataPart } from "@google/generative-ai";
 
-// This plugin will open a window to prompt the user to enter a number, and
-// it will then create that many rectangles on the screen.
+// Type definitions
+type PluginMessage = {
+  type: string;
+  apiKey?: string;
+  additionalPrompt?: string;
+};
 
-// This file holds the main code for plugins. Code in this file has access to
-// the *figma document* via the figma global object.
-// You can access browser APIs in the <script> tag inside "ui.html" which has a
-// full browser environment (See https://www.figma.com/plugin-docs/how-plugins-run).
+// Constants
+const INITIAL_PROMPT =
+  "Please review the following UI design. Provide feedback on its usability, visual appeal, and any potential areas for improvement. Consider aspects like layout, color scheme, typography, and overall user experience.";
+const GEMINI_MODEL_NAME = "gemini-pro-vision"; // gemini-2.0-flash から gemini-pro-vision に戻しました。必要に応じて変更してください。
 
 // This shows the HTML page in "ui.html".
 figma.showUI(__html__, { width: 300, height: 400 });
@@ -14,16 +18,14 @@ figma.showUI(__html__, { width: 300, height: 400 });
 // Calls to "parent.postMessage" from within the HTML page will trigger this
 // callback. The callback will be passed the "pluginMessage" property of the
 // posted message.
-figma.ui.onmessage = async (msg: {
-  type: string;
-  apiKey?: string;
-  additionalPrompt?: string;
-}) => {
-  // additionalPrompt を追加
+figma.ui.onmessage = async (msg: PluginMessage) => {
   if (msg.type === "get-review") {
-    const { apiKey, additionalPrompt } = msg; // additionalPrompt を追加
+    const { apiKey, additionalPrompt } = msg;
     if (!apiKey) {
-      figma.ui.postMessage({ type: "error", error: "API Key is missing." });
+      figma.ui.postMessage({
+        type: "error",
+        error: "API Key is missing. Please enter your Gemini API Key.",
+      });
       return;
     }
 
@@ -31,14 +33,16 @@ figma.ui.onmessage = async (msg: {
     if (selection.length === 0) {
       figma.ui.postMessage({
         type: "error",
-        error: "Please select a frame to review.",
+        error:
+          "No frame selected. Please select a frame, component, or instance to review.",
       });
       return;
     }
     if (selection.length > 1) {
       figma.ui.postMessage({
         type: "error",
-        error: "Please select only one frame.",
+        error:
+          "Multiple frames selected. Please select only one frame, component, or instance.",
       });
       return;
     }
@@ -52,10 +56,16 @@ figma.ui.onmessage = async (msg: {
     ) {
       figma.ui.postMessage({
         type: "error",
-        error: "Please select a frame, component, or instance.",
+        error:
+          "Invalid selection. Please select a frame, component, or instance.",
       });
       return;
     }
+
+    figma.ui.postMessage({
+      type: "loading",
+      message: "Exporting image and getting review...",
+    });
 
     try {
       // Export the selected frame as an image
@@ -64,29 +74,28 @@ figma.ui.onmessage = async (msg: {
 
       // Initialize Google Generative AI
       const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+      const model = genAI.getGenerativeModel({ model: GEMINI_MODEL_NAME });
 
-      const imagePart = {
+      const imagePart: InlineDataPart = {
         inlineData: {
           data: Buffer.from(imageBytes).toString("base64"),
           mimeType: "image/png",
         },
       };
 
-      const initialPrompt =
-        "Please review the following UI design. Provide feedback on its usability, visual appeal, and any potential areas for improvement. Consider aspects like layout, color scheme, typography, and overall user experience.";
       const fullPrompt = additionalPrompt
-        ? `${initialPrompt} ${additionalPrompt}`
-        : initialPrompt; // プロンプトを結合
+        ? `${INITIAL_PROMPT} ${additionalPrompt}`
+        : INITIAL_PROMPT;
 
-      const result = await model.generateContent([fullPrompt, imagePart]); // fullPrompt を使用
+      const result = await model.generateContent([fullPrompt, imagePart]);
       const response = result.response;
       const reviewText = response.text();
 
       figma.ui.postMessage({ type: "review-result", review: reviewText });
     } catch (error) {
       console.error("Error getting review:", error);
-      let errorMessage = "Failed to get review.";
+      let errorMessage =
+        "Failed to get review. Please check your API key and network connection.";
       if (error instanceof Error) {
         errorMessage = error.message;
       }
