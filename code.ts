@@ -1,10 +1,18 @@
-import { GoogleGenerativeAI, InlineDataPart } from "@google/generative-ai";
-
 // Type definitions
 type PluginMessage = {
   type: string;
   apiKey?: string;
   additionalPrompt?: string;
+};
+
+type GeminiResponse = {
+  candidates: Array<{
+    content: {
+      parts: Array<{
+        text: string;
+      }>;
+    };
+  }>;
 };
 
 // Constants
@@ -73,11 +81,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
       const exportSettings: ExportSettingsImage = { format: "PNG" };
       const imageBytes = await selectedFrame.exportAsync(exportSettings);
 
-      // Initialize Google Generative AI
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: GEMINI_MODEL_NAME });
-
-      const imagePart: InlineDataPart = {
+      const imagePart = {
         inlineData: {
           data: Buffer.from(imageBytes).toString("base64"),
           mimeType: "image/png",
@@ -88,9 +92,37 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
         ? `${INITIAL_PROMPT} ${additionalPrompt}`
         : INITIAL_PROMPT;
 
-      const result = await model.generateContent([fullPrompt, imagePart]);
-      const response = result.response;
-      const reviewText = response.text();
+      const requestBody = {
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                text: fullPrompt,
+              },
+              imagePart,
+            ],
+          },
+        ],
+      };
+
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_NAME}:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(requestBody),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = (await response.json()) as GeminiResponse;
+      const reviewText = result.candidates[0].content.parts[0].text;
 
       figma.ui.postMessage({ type: "review-result", review: reviewText });
     } catch (error) {
