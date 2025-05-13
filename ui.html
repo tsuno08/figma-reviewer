@@ -16,6 +16,8 @@
   <p>Select a frame in Figma and click the button below to get UI feedback.</p>
   <label for="apiKey">Gemini API Key:</label>
   <input type="password" id="apiKey" style="width: 100%; margin-bottom: 10px;">
+  <label for="additionalPrompt">Additional Instructions (Optional):</label>
+  <textarea id="additionalPrompt" placeholder="e.g., Focus on accessibility, suggest a different color palette."></textarea>
   <button id="getReview">Get Review</button>
   <div id="result">
     <p>Review will appear here.</p>
@@ -28,12 +30,13 @@
 
     getReviewButton.onclick = () => {
       const apiKey = apiKeyInput.value;
+      const additionalPrompt = document.getElementById('additionalPrompt').value; // 追加
       if (!apiKey) {
         resultDiv.innerHTML = '<p style="color: red;">Please enter your Gemini API Key.</p>';
         return;
       }
       resultDiv.innerHTML = '<p>Getting review...</p>';
-      parent.postMessage({ pluginMessage: { type: 'get-review', apiKey: apiKey } }, '*');
+      parent.postMessage({ pluginMessage: { type: 'get-review', apiKey: apiKey, additionalPrompt: additionalPrompt } }, '*'); // additionalPrompt を追加
     };
 
     window.onmessage = (event) => {

@@ -14,9 +14,14 @@ figma.showUI(__html__, { width: 300, height: 400 });
 // Calls to "parent.postMessage" from within the HTML page will trigger this
 // callback. The callback will be passed the "pluginMessage" property of the
 // posted message.
-figma.ui.onmessage = async (msg: { type: string; apiKey?: string }) => {
+figma.ui.onmessage = async (msg: {
+  type: string;
+  apiKey?: string;
+  additionalPrompt?: string;
+}) => {
+  // additionalPrompt を追加
   if (msg.type === "get-review") {
-    const { apiKey } = msg;
+    const { apiKey, additionalPrompt } = msg; // additionalPrompt を追加
     if (!apiKey) {
       figma.ui.postMessage({ type: "error", error: "API Key is missing." });
       return;
@@ -59,7 +64,7 @@ figma.ui.onmessage = async (msg: { type: string; apiKey?: string }) => {
 
       // Initialize Google Generative AI
       const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-pro-vision" });
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
       const imagePart = {
         inlineData: {
@@ -68,10 +73,13 @@ figma.ui.onmessage = async (msg: { type: string; apiKey?: string }) => {
         },
       };
 
-      const prompt =
+      const initialPrompt =
         "Please review the following UI design. Provide feedback on its usability, visual appeal, and any potential areas for improvement. Consider aspects like layout, color scheme, typography, and overall user experience.";
+      const fullPrompt = additionalPrompt
+        ? `${initialPrompt} ${additionalPrompt}`
+        : initialPrompt; // プロンプトを結合
 
-      const result = await model.generateContent([prompt, imagePart]);
+      const result = await model.generateContent([fullPrompt, imagePart]); // fullPrompt を使用
       const response = result.response;
       const reviewText = response.text();
 
