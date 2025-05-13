@@ -13,7 +13,8 @@
   "license": "",
   "devDependencies": {
     "@figma/eslint-plugin-figma-plugins": "*",
-    "@figma/plugin-typings": "*",
+    "@figma/plugin-typings": "^1.111.0",
+    "@types/node": "^22.15.17",
     "@typescript-eslint/eslint-plugin": "^6.12.0",
     "@typescript-eslint/parser": "^6.12.0",
     "eslint": "^8.54.0",
@@ -40,5 +41,9 @@
         }
       ]
     }
+  },
+  "packageManager": "pnpm@8.15.3+sha1.64838798f519c18029c1e8a1310e16101fc2eda0",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1"
   }
 }
