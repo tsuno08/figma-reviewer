@@ -9,8 +9,8 @@ type PluginMessage = {
 
 // Constants
 const INITIAL_PROMPT =
-  "Please review the following UI design. Provide feedback on its usability, visual appeal, and any potential areas for improvement. Consider aspects like layout, color scheme, typography, and overall user experience.";
-const GEMINI_MODEL_NAME = "gemini-pro-vision"; // gemini-2.0-flash から gemini-pro-vision に戻しました。必要に応じて変更してください。
+  "以下のUIデザインをレビューしてください。ユーザビリティ、視覚的な魅力、改善点の可能性についてフィードバックをお願いします。レイアウト、配色、タイポグラフィ、全体的なユーザーエクスペリエンスなどの側面を考慮してください。日本語で回答してください。";
+const GEMINI_MODEL_NAME = "gemini-2.0-flash";
 
 // This shows the HTML page in "ui.html".
 figma.showUI(__html__, { width: 300, height: 400 });
@@ -24,7 +24,8 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
     if (!apiKey) {
       figma.ui.postMessage({
         type: "error",
-        error: "API Key is missing. Please enter your Gemini API Key.",
+        error:
+          "APIキーが入力されていません。Gemini APIキーを入力してください。",
       });
       return;
     }
@@ -34,7 +35,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
       figma.ui.postMessage({
         type: "error",
         error:
-          "No frame selected. Please select a frame, component, or instance to review.",
+          "フレームが選択されていません。レビューするフレーム、コンポーネント、またはインスタンスを選択してください。",
       });
       return;
     }
@@ -42,7 +43,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
       figma.ui.postMessage({
         type: "error",
         error:
-          "Multiple frames selected. Please select only one frame, component, or instance.",
+          "複数のフレームが選択されています。レビューするフレーム、コンポーネント、またはインスタンスを1つだけ選択してください。",
       });
       return;
     }
@@ -57,14 +58,14 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
       figma.ui.postMessage({
         type: "error",
         error:
-          "Invalid selection. Please select a frame, component, or instance.",
+          "選択が無効です。フレーム、コンポーネント、またはインスタンスを選択してください。",
       });
       return;
     }
 
     figma.ui.postMessage({
       type: "loading",
-      message: "Exporting image and getting review...",
+      message: "画像をエクスポートし、レビューを取得しています...",
     });
 
     try {
@@ -93,9 +94,9 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
 
       figma.ui.postMessage({ type: "review-result", review: reviewText });
     } catch (error) {
-      console.error("Error getting review:", error);
+      console.error("レビュー取得エラー:", error);
       let errorMessage =
-        "Failed to get review. Please check your API key and network connection.";
+        "レビューの取得に失敗しました。APIキーとネットワーク接続を確認してください。";
       if (error instanceof Error) {
         errorMessage = error.message;
       }
