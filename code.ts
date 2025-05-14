@@ -16,17 +16,14 @@ type GeminiResponse = {
   }>;
 };
 
-// Constants
 const INITIAL_PROMPT =
   "以下のUIデザインをレビューしてください。ユーザビリティ、視覚的な魅力、改善点の可能性についてフィードバックをお願いします。レイアウト、配色、タイポグラフィ、全体的なユーザーエクスペリエンスなどの側面を考慮してください。800文字以内で簡潔に、日本語で回答してください。\n\n回答の形式について：\n- 見出しには '#' を使用可能です\n- 箇条書きには '-' を使用可能です\n- 太字、斜体、コードブロックなどの装飾的な記法の使用は避けてください";
 const GEMINI_MODEL_NAME = "gemini-2.0-flash";
 const STORAGE_API_KEY = "gemini-api-key";
 const STORAGE_FIGMA_TOKEN = "figma-token";
 
-// This shows the HTML page in "ui.html".
 figma.showUI(__html__, { width: 300, height: 400 });
 
-// レビューテキストのクリーンアップ
 function cleanReviewText(text: string): string {
   return text
     .replace(/[`*_~>]/g, "") // 装飾的なMarkdown記法のみを除去（#や-は構造化のために残す）
@@ -57,14 +54,16 @@ async function requestGeminiAPI(
       const waitTime = Math.pow(2, retryCount) * 1000; // 1秒、2秒、4秒と待ち時間を増やす
       figma.ui.postMessage({
         type: "loading",
-        message: `サーバーが混雑しています。${waitTime / 1000}秒後に再試行します...`,
+        message: `サーバーが混雑しています。${
+          waitTime / 1000
+        }秒後に再試行します...`,
       });
       await new Promise((resolve) => setTimeout(resolve, waitTime));
       return requestGeminiAPI(apiKey, requestBody, retryCount + 1);
     }
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      throw new Error("APIリクエストに失敗しました");
     }
 
     return (await response.json()) as GeminiResponse;
@@ -76,9 +75,6 @@ async function requestGeminiAPI(
   }
 }
 
-// Calls to "parent.postMessage" from within the HTML page will trigger this
-// callback. The callback will be passed the "pluginMessage" property of the
-// posted message.
 figma.ui.onmessage = async (msg: PluginMessage) => {
   if (msg.type === "load-api-key") {
     const savedApiKey = await figma.clientStorage.getAsync(STORAGE_API_KEY);
@@ -98,7 +94,9 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
     if (!apiKey || !figmaToken) {
       // 保存されたAPIキーを確認
       const savedApiKey = await figma.clientStorage.getAsync(STORAGE_API_KEY);
-      const savedToken = await figma.clientStorage.getAsync(STORAGE_FIGMA_TOKEN);
+      const savedToken = await figma.clientStorage.getAsync(
+        STORAGE_FIGMA_TOKEN
+      );
       if (!savedApiKey || !savedToken) {
         figma.ui.postMessage({
           type: "error",
@@ -124,14 +122,16 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
     if (selection.length === 0) {
       figma.ui.postMessage({
         type: "error",
-        error: "フレームが選択されていません。レビューするフレーム、コンポーネント、またはインスタンスを選択してください。",
+        error:
+          "フレームが選択されていません。レビューするフレーム、コンポーネント、またはインスタンスを選択してください。",
       });
       return;
     }
     if (selection.length > 1) {
       figma.ui.postMessage({
         type: "error",
-        error: "複数のフレームが選択されています。レビューするフレーム、コンポーネント、またはインスタンスを1つだけ選択してください。",
+        error:
+          "複数のフレームが選択されています。レビューするフレーム、コンポーネント、またはインスタンスを1つだけ選択してください。",
       });
       return;
     }
@@ -145,7 +145,8 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
     ) {
       figma.ui.postMessage({
         type: "error",
-        error: "選択が無効です。フレーム、コンポーネント、またはインスタンスを選択してください。",
+        error:
+          "選択が無効です。フレーム、コンポーネント、またはインスタンスを選択してください。",
       });
       return;
     }
@@ -206,22 +207,25 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
             message: cleanReviewText(rawReviewText),
             client_meta: {
               node_id: selectedFrame.id,
-              node_offset: { x: 0, y: 0 }
+              node_offset: { x: 0, y: 0 },
             },
-            pinned_node: selectedFrame.id
+            pinned_node: selectedFrame.id,
           }),
         }
       );
 
       if (!commentResponse.ok) {
-        throw new Error(`コメントの追加に失敗しました: ${commentResponse.status}`);
+        throw new Error(
+          `コメントの追加に失敗しました: ${commentResponse.status}`
+        );
       }
 
       figma.notify("レビューをコメントとして追加しました");
       figma.closePlugin();
     } catch (error) {
       console.error("レビュー取得エラー:", error);
-      let errorMessage = "レビューの取得に失敗しました。APIキーとネットワーク接続を確認してください。";
+      let errorMessage =
+        "レビューの取得に失敗しました。APIキーとネットワーク接続を確認してください。";
       if (error instanceof Error) {
         errorMessage = error.message;
       }
