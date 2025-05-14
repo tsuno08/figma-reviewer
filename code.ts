@@ -23,19 +23,12 @@ const STORAGE_FIGMA_TOKEN = "figma-token";
 
 figma.showUI(__html__, { width: 400, height: 400 });
 
-function cleanReviewText(text: string): string {
-  return text
-    .replace(/[`*_~>]/g, "") // 装飾的なMarkdown記法のみを除去（#や-は構造化のために残す）
-    .replace(/\n{3,}/g, "\n\n") // 過剰な改行を2行までに制限
-    .trim(); // 前後の余分な空白を除去
-}
-
 // Gemini APIへのリクエストとリトライ処理
-async function requestGeminiAPI(
+const requestGeminiAPI = async (
   apiKey: string,
   requestBody: any,
   retryCount = 0
-): Promise<GeminiResponse> {
+): Promise<GeminiResponse | void> => {
   try {
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_NAME}:generateContent?key=${apiKey}`,
@@ -62,7 +55,7 @@ async function requestGeminiAPI(
       figma.notify(
         `APIリクエストに失敗しました: ${response.status} ${response.statusText}`
       );
-      throw new Error("APIリクエストに失敗しました");
+      return;
     }
 
     return (await response.json()) as GeminiResponse;
@@ -71,153 +64,171 @@ async function requestGeminiAPI(
       throw error;
     }
     figma.notify(`APIリクエストに失敗しました: ${error}`);
-    throw new Error("APIリクエストに失敗しました");
+    return;
   }
-}
+};
 
 figma.ui.onmessage = async (msg: PluginMessage) => {
-  if (msg.type === "load-api-key") {
-    const savedApiKey = await figma.clientStorage.getAsync(STORAGE_API_KEY);
-    if (savedApiKey) {
-      figma.ui.postMessage({ type: "api-key-loaded", apiKey: savedApiKey });
-    }
-  } else if (msg.type === "load-figma-token") {
-    const savedToken = await figma.clientStorage.getAsync(STORAGE_FIGMA_TOKEN);
-    if (savedToken) {
-      figma.ui.postMessage({
-        type: "figma-token-loaded",
-        figmaToken: savedToken,
-      });
-    }
-  } else if (msg.type === "get-review") {
-    const { apiKey, figmaToken, additionalPrompt } = msg;
-    if (!apiKey || !figmaToken) {
-      // 保存されたAPIキーを確認
+  switch (msg.type) {
+    case "load-api-key":
       const savedApiKey = await figma.clientStorage.getAsync(STORAGE_API_KEY);
+      if (savedApiKey) {
+        figma.ui.postMessage({ type: "api-key-loaded", apiKey: savedApiKey });
+      }
+      break;
+    case "load-figma-token":
       const savedToken = await figma.clientStorage.getAsync(
         STORAGE_FIGMA_TOKEN
       );
-      if (!savedApiKey || !savedToken) {
+      if (savedToken) {
+        figma.ui.postMessage({
+          type: "figma-token-loaded",
+          figmaToken: savedToken,
+        });
+      }
+      break;
+    case "load-gemini-api":
+      figma.ui.postMessage({
+        type: "load-gemini-api",
+      });
+      break;
+    case "get-review":
+      const { apiKey, figmaToken, additionalPrompt } = msg;
+      if (!apiKey || !figmaToken) {
+        // 保存されたAPIキーを確認
+        const savedApiKey = await figma.clientStorage.getAsync(STORAGE_API_KEY);
+        const savedToken = await figma.clientStorage.getAsync(
+          STORAGE_FIGMA_TOKEN
+        );
+        if (!savedApiKey || !savedToken) {
+          figma.notify(
+            !savedApiKey && !savedToken
+              ? "APIキーとFigmaトークンが入力されていません。"
+              : !savedApiKey
+              ? "APIキーが入力されていません。"
+              : "Figmaトークンが入力されていません。"
+          );
+          return;
+        }
+        msg.apiKey = savedApiKey;
+        msg.figmaToken = savedToken;
+      } else {
+        // 認証情報を保存
+        if (apiKey) await figma.clientStorage.setAsync(STORAGE_API_KEY, apiKey);
+        if (figmaToken)
+          await figma.clientStorage.setAsync(STORAGE_FIGMA_TOKEN, figmaToken);
+      }
+
+      const selection = figma.currentPage.selection;
+      if (selection.length === 0) {
         figma.notify(
-          !savedApiKey && !savedToken
-            ? "APIキーとFigmaトークンが入力されていません。"
-            : !savedApiKey
-            ? "APIキーが入力されていません。"
-            : "Figmaトークンが入力されていません。"
+          "フレーム、コンポーネント、またはインスタンスを選択してください。"
         );
         return;
       }
-      msg.apiKey = savedApiKey;
-      msg.figmaToken = savedToken;
-    } else {
-      // 認証情報を保存
-      if (apiKey) await figma.clientStorage.setAsync(STORAGE_API_KEY, apiKey);
-      if (figmaToken)
-        await figma.clientStorage.setAsync(STORAGE_FIGMA_TOKEN, figmaToken);
-    }
-
-    const selection = figma.currentPage.selection;
-    if (selection.length === 0) {
-      figma.notify(
-        "フレーム、コンポーネント、またはインスタンスを選択してください。"
-      );
-      return;
-    }
-    if (selection.length > 1) {
-      figma.notify("1つだけ選択してください。");
-      return;
-    }
-
-    const selectedFrame = selection[0];
-
-    if (
-      selectedFrame.type !== "FRAME" &&
-      selectedFrame.type !== "COMPONENT" &&
-      selectedFrame.type !== "INSTANCE"
-    ) {
-      figma.notify(
-        "フレーム、コンポーネント、またはインスタンスを選択してください。"
-      );
-      return;
-    }
-
-    figma.notify("レビューを取得中...");
-
-    try {
-      // Export the selected frame as an image
-      const exportSettings: ExportSettingsImage = { format: "PNG" };
-      const imageBytes = await selectedFrame.exportAsync(exportSettings);
-
-      const imagePart = {
-        inlineData: {
-          data: figma.base64Encode(imageBytes),
-          mimeType: "image/png",
-        },
-      };
-
-      const fullPrompt = additionalPrompt
-        ? `${INITIAL_PROMPT} ${additionalPrompt}`
-        : INITIAL_PROMPT;
-
-      const requestBody = {
-        contents: [
-          {
-            role: "user",
-            parts: [
-              {
-                text: fullPrompt,
-              },
-              imagePart,
-            ],
-          },
-        ],
-      };
-
-      const result = await requestGeminiAPI(msg.apiKey!, requestBody);
-      if (!result || !result.candidates || result.candidates.length === 0) {
-        figma.notify("レビューの取得に失敗しました。");
+      if (selection.length > 1) {
+        figma.notify("1つだけ選択してください。");
         return;
       }
 
-      // レビューテキストから装飾を削除し、プレーンテキストに変換
-      const rawReviewText = result.candidates[0].content.parts[0].text;
+      const selectedFrame = selection[0];
 
-      // レビューをコメントとして追加
-      figma.notify("レビューを追加しています...");
+      if (
+        selectedFrame.type !== "FRAME" &&
+        selectedFrame.type !== "COMPONENT" &&
+        selectedFrame.type !== "INSTANCE"
+      ) {
+        figma.notify(
+          "フレーム、コンポーネント、またはインスタンスを選択してください。"
+        );
+        return;
+      }
 
-      const fileKey = figma.fileKey;
-      const commentResponse = await fetch(
-        `https://api.figma.com/v1/files/${fileKey}/comments`,
-        {
-          method: "POST",
-          headers: {
-            "X-FIGMA-TOKEN": msg.figmaToken!, // Non-null assertion operatorを使用
-            "Content-Type": "application/json",
+      figma.notify("レビューを取得中...");
+
+      try {
+        const exportSettings: ExportSettingsImage = { format: "PNG" };
+        const imageBytes = await selectedFrame.exportAsync(exportSettings);
+
+        const imagePart = {
+          inlineData: {
+            data: figma.base64Encode(imageBytes),
+            mimeType: "image/png",
           },
-          body: JSON.stringify({
-            message: cleanReviewText(rawReviewText),
-            client_meta: {
-              node_id: selectedFrame.id,
-              node_offset: { x: 0, y: 0 },
+        };
+
+        const fullPrompt = additionalPrompt
+          ? `${INITIAL_PROMPT} ${additionalPrompt}`
+          : INITIAL_PROMPT;
+
+        const requestBody = {
+          contents: [
+            {
+              role: "user",
+              parts: [
+                {
+                  text: fullPrompt,
+                },
+                imagePart,
+              ],
             },
-            pinned_node: selectedFrame.id,
-          }),
+          ],
+        };
+
+        const result = await requestGeminiAPI(msg.apiKey!, requestBody);
+        if (
+          !result ||
+          !result.candidates ||
+          result.candidates.length === 0 ||
+          !result.candidates[0].content ||
+          !result.candidates[0].content.parts ||
+          result.candidates[0].content.parts.length === 0
+        ) {
+          figma.notify("レビューの取得に失敗しました。");
+          return;
         }
-      );
 
-      if (!commentResponse.ok) {
-        figma.notify(`コメントの追加に失敗しました: ${commentResponse.status}`);
-      }
+        const reviewText = result.candidates[0].content.parts[0].text;
 
-      figma.notify("レビューをコメントとして追加しました");
-      figma.closePlugin();
-    } catch (error) {
-      let errorMessage =
-        "レビューの取得に失敗しました。APIキーとネットワーク接続を確認してください。";
-      if (error instanceof Error) {
-        errorMessage = error.message;
+        // レビューをコメントとして追加
+        figma.notify("レビューを追加しています...");
+
+        const fileKey = figma.fileKey;
+        const commentResponse = await fetch(
+          `https://api.figma.com/v1/files/${fileKey}/comments`,
+          {
+            method: "POST",
+            headers: {
+              "X-FIGMA-TOKEN": msg.figmaToken!, // Non-null assertion operatorを使用
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              message: reviewText,
+              client_meta: {
+                node_id: selectedFrame.id,
+                node_offset: { x: 0, y: 0 },
+              },
+              pinned_node: selectedFrame.id,
+            }),
+          }
+        );
+
+        if (!commentResponse.ok) {
+          figma.notify(
+            `コメントの追加に失敗しました: ${commentResponse.status}`
+          );
+          return;
+        }
+
+        figma.notify("レビューをコメントとして追加しました");
+        figma.closePlugin();
+      } catch (error) {
+        let errorMessage =
+          "レビューの取得に失敗しました。APIキーとネットワーク接続を確認してください。";
+        if (error instanceof Error) {
+          errorMessage = error.message;
+        }
+        figma.notify(errorMessage);
       }
-      figma.notify(errorMessage);
-    }
   }
 };
