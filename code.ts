@@ -34,28 +34,6 @@ function cleanReviewText(text: string): string {
     .trim(); // 前後の余分な空白を除去
 }
 
-// Base64エンコーディングのヘルパー関数
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  const base64Chars =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-  let binary = "";
-  const len = bytes.byteLength;
-  for (let i = 0; i < len; i += 3) {
-    const chunk =
-      (bytes[i] << 16) |
-      ((i + 1 < len ? bytes[i + 1] : 0) << 8) |
-      (i + 2 < len ? bytes[i + 2] : 0);
-    const base64Chunk =
-      base64Chars[(chunk >> 18) & 63] +
-      base64Chars[(chunk >> 12) & 63] +
-      (i + 1 < len ? base64Chars[(chunk >> 6) & 63] : "=") +
-      (i + 2 < len ? base64Chars[chunk & 63] : "=");
-    binary += base64Chunk;
-  }
-  return binary;
-}
-
 // Calls to "parent.postMessage" from within the HTML page will trigger this
 // callback. The callback will be passed the "pluginMessage" property of the
 // posted message.
@@ -147,7 +125,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
 
       const imagePart = {
         inlineData: {
-          data: arrayBufferToBase64(imageBytes),
+          data: figma.base64Encode(imageBytes),
           mimeType: "image/png",
         },
       };

@@ -1,273 +1,246 @@
 <!DOCTYPE html>
 <html lang="ja">
-<head>
-  <meta charset="UTF-8">
-  <title>UIレビューアー</title>
-  <style>
-    body { 
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      padding: 20px;
-      max-width: 600px;
-      margin: 0 auto;
-      background-color: #f8f9fa;
-    }
-    h2 {
-      color: #2c3e50;
-      margin-bottom: 1rem;
-      font-weight: 600;
-    }
-    label {
-      display: block;
-      margin-bottom: 0.5rem;
-      color: #495057;
-      font-weight: 500;
-    }
-    textarea { 
-      width: 100%;
-      height: 100px;
-      margin-bottom: 1rem;
-      padding: 12px;
-      box-sizing: border-box;
-      border: 1px solid #ced4da;
-      border-radius: 6px;
-      font-size: 14px;
-      resize: vertical;
-    }
-    input[type="password"] { 
-      width: 100%;
-      margin-bottom: 1rem;
-      padding: 12px;
-      box-sizing: border-box;
-      border: 1px solid #ced4da;
-      border-radius: 6px;
-      font-size: 14px;
-    }
-    button { 
-      padding: 12px 20px;
-      background-color: #0066cc;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      margin-right: 8px;
-      font-weight: 500;
-      transition: background-color 0.2s ease;
-    }
-    button:hover { 
-      background-color: #0052a3;
-    }
-    button:disabled { 
-      background-color: #a0a0a0;
-      cursor: not-allowed;
-    }
-    #result { 
-      margin-top: 1.5rem;
-      padding: 16px;
-      border: 1px solid #e9ecef;
-      border-radius: 8px;
-      background-color: white;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
-    .loader { 
-      border: 3px solid #f3f3f3;
-      border-radius: 50%;
-      border-top: 3px solid #0066cc;
-      width: 24px;
-      height: 24px;
-      animation: spin 1s linear infinite;
-      display: none;
-      margin: 1rem auto;
-    }
-    @keyframes spin { 
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-    .button-group { 
-      margin-top: 1rem;
-      display: flex;
-      gap: 8px;
-    }
-    .error-message { 
-      color: #dc3545;
-      font-weight: 500;
-      padding: 8px;
-      background-color: #fff5f5;
-      border-radius: 4px;
-      margin-bottom: 1rem;
-    }
-    .review-content { 
-      white-space: pre-wrap;
-      word-wrap: break-word;
-      line-height: 1.6;
-      font-size: 14px;
-      background-color: #f8f9fa;
-      padding: 12px;
-      border-radius: 4px;
-      margin: 0;
-    }
-    .description {
-      color: #6c757d;
-      font-size: 14px;
-      margin-bottom: 1.5rem;
-      line-height: 1.6;
-    }
-    .accordion {
-      margin-bottom: 1rem;
-    }
-    .accordion-header {
-      background-color: #f8f9fa;
-      padding: 10px;
-      border: 1px solid #ced4da;
-      border-radius: 6px;
-      cursor: pointer;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 0;
-      user-select: none;
-    }
-    .accordion-header:hover {
-      background-color: #e9ecef;
-    }
-    .accordion-content {
-      display: none;
-      padding-top: 0.5rem;
-    }
-    .accordion-content.show {
-      display: block;
-    }
-    .accordion-icon {
-      transition: transform 0.3s ease;
-    }
-    .accordion-header.active .accordion-icon {
-      transform: rotate(180deg);
-    }
-  </style>
-</head>
-<body>
-  <h2>UIレビューアー</h2>
-  <p class="description">Figmaでフレームを選択し、APIキーを入力して「レビューを取得」をクリックしてください。</p>
-  
-  <label for="apiKey">Gemini APIキー:</label>
-  <input type="password" id="apiKey" placeholder="Gemini APIキーを入力してください">
-
-  <label for="figmaToken">Figmaアクセストークン:</label>
-  <input type="password" id="figmaToken" placeholder="Figmaのアクセストークンを入力してください">
-
-  <div class="accordion">
-    <div class="accordion-header" id="additionalPromptHeader">
-      <span>追加の指示（任意）</span>
-      <span class="accordion-icon">▼</span>
-    </div>
-    <div class="accordion-content" id="additionalPromptContent">
-      <textarea id="additionalPrompt" placeholder="例：アクセシビリティに焦点を当てる、異なるカラーパレットを提案する など"></textarea>
-    </div>
-  </div>
-
-  <button id="getReview">レビューを取得</button>
-  <div class="loader" id="loader"></div>
-  <div id="result">
-    <p>ここにレビューが表示されます。</p>
-  </div>
-  <div class="button-group">
-    <button id="copyReview" style="display:none;">レビューをコピー</button>
-    <button id="clearResult" style="display:none;">クリア</button>
-  </div>
-
-  <script>
-    const apiKeyInput = document.getElementById('apiKey');
-    const figmaTokenInput = document.getElementById('figmaToken');
-    const additionalPromptInput = document.getElementById('additionalPrompt');
-    const getReviewButton = document.getElementById('getReview');
-    const resultDiv = document.getElementById('result');
-    const loader = document.getElementById('loader');
-    const copyReviewButton = document.getElementById('copyReview');
-    const clearResultButton = document.getElementById('clearResult');
-
-    // 保存された認証情報を読み込む
-    parent.postMessage({ pluginMessage: { type: 'load-api-key' } }, '*');
-    parent.postMessage({ pluginMessage: { type: 'load-figma-token' } }, '*');
-
-    const setUiLoadingState = (isLoading) => {
-      getReviewButton.disabled = isLoading;
-      loader.style.display = isLoading ? 'block' : 'none';
-    };
-
-    getReviewButton.onclick = () => {
-      const apiKey = apiKeyInput.value;
-      const figmaToken = figmaTokenInput.value;
-      const additionalPrompt = additionalPromptInput.value;
-      
-      if (!apiKey || !figmaToken) {
-        let errorMessage = '';
-        if (!apiKey && !figmaToken) {
-          errorMessage = 'Gemini APIキーとFigmaアクセストークンを入力してください。';
-          apiKeyInput.style.borderColor = '#dc3545';
-          figmaTokenInput.style.borderColor = '#dc3545';
-        } else if (!apiKey) {
-          errorMessage = 'Gemini APIキーを入力してください。';
-          apiKeyInput.style.borderColor = '#dc3545';
-        } else {
-          errorMessage = 'Figmaアクセストークンを入力してください。';
-          figmaTokenInput.style.borderColor = '#dc3545';
-        }
-        resultDiv.innerHTML = `<p class="error-message">${errorMessage}</p>`;
-        return;
+  <head>
+    <meta charset="UTF-8" />
+    <title>UIレビューアー</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        padding: 20px;
+        max-width: 600px;
+        margin: 0 auto;
+        background-color: #f8f9fa;
       }
-      
-      apiKeyInput.style.borderColor = '';
-      figmaTokenInput.style.borderColor = '';
-      setUiLoadingState(true);
-      resultDiv.innerHTML = '<p>レビューを取得しています...</p>';
-      copyReviewButton.style.display = 'none';
-      clearResultButton.style.display = 'none';
-      
-      parent.postMessage({
-        pluginMessage: {
-          type: 'get-review',
-          apiKey,
-          figmaToken,
-          additionalPrompt
-        }
-      }, '*');
-    };
-
-    copyReviewButton.onclick = () => {
-      const reviewText = resultDiv.querySelector('pre')?.innerText;
-      if (reviewText) {
-        navigator.clipboard.writeText(reviewText)
-          .then(() => { alert('レビューをコピーしました！'); })
-          .catch(err => { console.error('コピーに失敗しました: ', err); alert('コピーに失敗しました。'); });
+      h2 {
+        color: #2c3e50;
+        margin-bottom: 1rem;
+        font-weight: 600;
       }
-    };
+      label {
+        display: block;
+        margin-bottom: 0.5rem;
+        color: #495057;
+        font-weight: 500;
+      }
+      textarea {
+        width: 100%;
+        height: 100px;
+        margin-bottom: 1rem;
+        padding: 12px;
+        box-sizing: border-box;
+        border: 1px solid #ced4da;
+        border-radius: 6px;
+        font-size: 14px;
+        resize: vertical;
+      }
+      input[type="password"] {
+        width: 100%;
+        margin-bottom: 1rem;
+        padding: 12px;
+        box-sizing: border-box;
+        border: 1px solid #ced4da;
+        border-radius: 6px;
+        font-size: 14px;
+      }
+      button {
+        padding: 12px 20px;
+        background-color: #0066cc;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        margin-right: 8px;
+        font-weight: 500;
+        transition: background-color 0.2s ease;
+      }
+      button:hover {
+        background-color: #0052a3;
+      }
+      button:disabled {
+        background-color: #a0a0a0;
+        cursor: not-allowed;
+      }
+      .loader {
+        border: 3px solid #f3f3f3;
+        border-radius: 50%;
+        border-top: 3px solid #0066cc;
+        width: 24px;
+        height: 24px;
+        animation: spin 1s linear infinite;
+        display: none;
+        margin: 1rem auto;
+      }
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+      .description {
+        color: #6c757d;
+        font-size: 14px;
+        margin-bottom: 1.5rem;
+        line-height: 1.6;
+      }
+      .accordion {
+        margin-bottom: 1rem;
+      }
+      .accordion-header {
+        background-color: #f8f9fa;
+        padding: 10px;
+        border: 1px solid #ced4da;
+        border-radius: 6px;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0;
+        user-select: none;
+      }
+      .accordion-header:hover {
+        background-color: #e9ecef;
+      }
+      .accordion-content {
+        display: none;
+        padding-top: 0.5rem;
+      }
+      .accordion-content.show {
+        display: block;
+      }
+      .accordion-icon {
+        transition: transform 0.3s ease;
+      }
+      .accordion-header.active .accordion-icon {
+        transform: rotate(180deg);
+      }
+    </style>
+  </head>
+  <body>
+    <h2>UIレビューアー</h2>
+    <p class="description">
+      Figmaでフレームを選択し、APIキーを入力して「レビューを取得」をクリックしてください。
+    </p>
 
-    clearResultButton.onclick = () => {
-      resultDiv.innerHTML = '<p>ここにレビューが表示されます。</p>';
-      copyReviewButton.style.display = 'none';
-      clearResultButton.style.display = 'none';
-    };
+    <label for="apiKey">Gemini APIキー:</label>
+    <input
+      type="password"
+      id="apiKey"
+      placeholder="Gemini APIキーを入力してください"
+    />
 
-    window.onmessage = (event) => {
-      const message = event.data.pluginMessage;
-      setUiLoadingState(false);
+    <label for="figmaToken">Figmaアクセストークン:</label>
+    <input
+      type="password"
+      id="figmaToken"
+      placeholder="Figmaのアクセストークンを入力してください"
+    />
 
-      if (message.type === 'api-key-loaded' && message.apiKey) {
-        apiKeyInput.value = message.apiKey;
-      } else if (message.type === 'figma-token-loaded' && message.figmaToken) {
-        figmaTokenInput.value = message.figmaToken;
-      } else if (message.type === 'review-result') {
-        resultDiv.innerHTML = `<p><strong>レビュー結果:</strong></p><pre class="review-content">${message.review}</pre>`;
-        copyReviewButton.style.display = 'inline-block';
-        clearResultButton.style.display = 'inline-block';
-      } else if (message.type === 'error') {
-        resultDiv.innerHTML = `<p class="error-message"><strong>エラー:</strong> ${message.error}</p>`;
-        copyReviewButton.style.display = 'none';
-        clearResultButton.style.display = 'none';
-      } else if (message.type === 'loading') {
-        resultDiv.innerHTML = `<p>${message.message || '処理中...'}</p>`;
+    <div class="accordion">
+      <div class="accordion-header" id="additionalPromptHeader">
+        <span>追加の指示（任意）</span>
+        <span class="accordion-icon">▼</span>
+      </div>
+      <div class="accordion-content" id="additionalPromptContent">
+        <textarea
+          id="additionalPrompt"
+          placeholder="例：アクセシビリティに焦点を当てる、異なるカラーパレットを提案する など"
+        ></textarea>
+      </div>
+    </div>
+
+    <button id="getReview">レビューを取得</button>
+    <div class="loader" id="loader"></div>
+
+    <script>
+      const apiKeyInput = document.getElementById("apiKey");
+      const figmaTokenInput = document.getElementById("figmaToken");
+      const additionalPromptInput = document.getElementById("additionalPrompt");
+      const getReviewButton = document.getElementById("getReview");
+      const loader = document.getElementById("loader");
+
+      // 保存された認証情報を読み込む
+      parent.postMessage({ pluginMessage: { type: "load-api-key" } }, "*");
+      parent.postMessage({ pluginMessage: { type: "load-figma-token" } }, "*");
+
+      const setUiLoadingState = (isLoading) => {
+        getReviewButton.disabled = isLoading;
+        loader.style.display = isLoading ? "block" : "none";
+      };
+
+      getReviewButton.onclick = () => {
+        const apiKey = apiKeyInput.value;
+        const figmaToken = figmaTokenInput.value;
+        const additionalPrompt = additionalPromptInput.value;
+
+        if (!apiKey || !figmaToken) {
+          if (!apiKey && !figmaToken) {
+            parent.postMessage(
+              {
+                pluginMessage: {
+                  type: "error",
+                  error:
+                    "Gemini APIキーとFigmaアクセストークンを入力してください。",
+                },
+              },
+              "*"
+            );
+          } else if (!apiKey) {
+            parent.postMessage(
+              {
+                pluginMessage: {
+                  type: "error",
+                  error: "Gemini APIキーを入力してください。",
+                },
+              },
+              "*"
+            );
+          } else {
+            parent.postMessage(
+              {
+                pluginMessage: {
+                  type: "error",
+                  error: "Figmaアクセストークンを入力してください。",
+                },
+              },
+              "*"
+            );
+          }
+          return;
+        }
+
         setUiLoadingState(true);
-      }
-    };
-  </script>
-</body>
+
+        parent.postMessage(
+          {
+            pluginMessage: {
+              type: "get-review",
+              apiKey,
+              figmaToken,
+              additionalPrompt,
+            },
+          },
+          "*"
+        );
+      };
+
+      window.onmessage = (event) => {
+        const message = event.data.pluginMessage;
+        setUiLoadingState(false);
+
+        if (message.type === "api-key-loaded" && message.apiKey) {
+          apiKeyInput.value = message.apiKey;
+        } else if (
+          message.type === "figma-token-loaded" &&
+          message.figmaToken
+        ) {
+          figmaTokenInput.value = message.figmaToken;
+        } else if (message.type === "error" || message.type === "loading") {
+          setUiLoadingState(message.type === "loading");
+        }
+      };
+    </script>
+  </body>
 </html>
