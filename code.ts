@@ -1,4 +1,3 @@
-// Type definitions
 type PluginMessage = {
   type: string;
   apiKey?: string;
@@ -22,7 +21,7 @@ const GEMINI_MODEL_NAME = "gemini-2.0-flash";
 const STORAGE_API_KEY = "gemini-api-key";
 const STORAGE_FIGMA_TOKEN = "figma-token";
 
-figma.showUI(__html__, { width: 300, height: 400 });
+figma.showUI(__html__, { width: 400, height: 400 });
 
 function cleanReviewText(text: string): string {
   return text
@@ -52,17 +51,17 @@ async function requestGeminiAPI(
     if (response.status === 503 && retryCount < 3) {
       // 503エラーの場合は少し待ってリトライ
       const waitTime = Math.pow(2, retryCount) * 1000; // 1秒、2秒、4秒と待ち時間を増やす
-      figma.ui.postMessage({
-        type: "loading",
-        message: `サーバーが混雑しています。${
-          waitTime / 1000
-        }秒後に再試行します...`,
-      });
+      figma.notify(
+        `サーバーが混雑しています。${waitTime / 1000}秒後に再試行します...`
+      );
       await new Promise((resolve) => setTimeout(resolve, waitTime));
       return requestGeminiAPI(apiKey, requestBody, retryCount + 1);
     }
 
     if (!response.ok) {
+      figma.notify(
+        `APIリクエストに失敗しました: ${response.status} ${response.statusText}`
+      );
       throw new Error("APIリクエストに失敗しました");
     }
 
@@ -71,6 +70,7 @@ async function requestGeminiAPI(
     if (error instanceof Error) {
       throw error;
     }
+    figma.notify(`APIリクエストに失敗しました: ${error}`);
     throw new Error("APIリクエストに失敗しました");
   }
 }
@@ -98,15 +98,13 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
         STORAGE_FIGMA_TOKEN
       );
       if (!savedApiKey || !savedToken) {
-        figma.ui.postMessage({
-          type: "error",
-          error:
-            !savedApiKey && !savedToken
-              ? "APIキーとFigmaトークンが入力されていません。"
-              : !savedApiKey
-              ? "APIキーが入力されていません。"
-              : "Figmaトークンが入力されていません。",
-        });
+        figma.notify(
+          !savedApiKey && !savedToken
+            ? "APIキーとFigmaトークンが入力されていません。"
+            : !savedApiKey
+            ? "APIキーが入力されていません。"
+            : "Figmaトークンが入力されていません。"
+        );
         return;
       }
       msg.apiKey = savedApiKey;
@@ -120,19 +118,13 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
 
     const selection = figma.currentPage.selection;
     if (selection.length === 0) {
-      figma.ui.postMessage({
-        type: "error",
-        error:
-          "フレームが選択されていません。レビューするフレーム、コンポーネント、またはインスタンスを選択してください。",
-      });
+      figma.notify(
+        "フレーム、コンポーネント、またはインスタンスを選択してください。"
+      );
       return;
     }
     if (selection.length > 1) {
-      figma.ui.postMessage({
-        type: "error",
-        error:
-          "複数のフレームが選択されています。レビューするフレーム、コンポーネント、またはインスタンスを1つだけ選択してください。",
-      });
+      figma.notify("1つだけ選択してください。");
       return;
     }
 
@@ -143,18 +135,13 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
       selectedFrame.type !== "COMPONENT" &&
       selectedFrame.type !== "INSTANCE"
     ) {
-      figma.ui.postMessage({
-        type: "error",
-        error:
-          "選択が無効です。フレーム、コンポーネント、またはインスタンスを選択してください。",
-      });
+      figma.notify(
+        "フレーム、コンポーネント、またはインスタンスを選択してください。"
+      );
       return;
     }
 
-    figma.ui.postMessage({
-      type: "loading",
-      message: "画像をエクスポートし、レビューを取得しています...",
-    });
+    figma.notify("レビューを取得中...");
 
     try {
       // Export the selected frame as an image
@@ -187,6 +174,10 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
       };
 
       const result = await requestGeminiAPI(msg.apiKey!, requestBody);
+      if (!result || !result.candidates || result.candidates.length === 0) {
+        figma.notify("レビューの取得に失敗しました。");
+        return;
+      }
 
       // レビューテキストから装飾を削除し、プレーンテキストに変換
       const rawReviewText = result.candidates[0].content.parts[0].text;
@@ -215,21 +206,18 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
       );
 
       if (!commentResponse.ok) {
-        throw new Error(
-          `コメントの追加に失敗しました: ${commentResponse.status}`
-        );
+        figma.notify(`コメントの追加に失敗しました: ${commentResponse.status}`);
       }
 
       figma.notify("レビューをコメントとして追加しました");
       figma.closePlugin();
     } catch (error) {
-      console.error("レビュー取得エラー:", error);
       let errorMessage =
         "レビューの取得に失敗しました。APIキーとネットワーク接続を確認してください。";
       if (error instanceof Error) {
         errorMessage = error.message;
       }
-      figma.ui.postMessage({ type: "error", error: errorMessage });
+      figma.notify(errorMessage);
     }
   }
 };

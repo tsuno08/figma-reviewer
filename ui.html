@@ -126,15 +126,6 @@
       .accordion-header.active .accordion-icon {
         transform: rotate(180deg);
       }
-      .status-message {
-        font-size: 12px;
-        color: #495057;
-        margin-left: 4px;
-        flex: 1;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
     </style>
   </head>
   <body>
@@ -173,7 +164,6 @@
     <div class="button-container">
       <button id="getReview">レビューを取得</button>
       <div class="loader" id="loader"></div>
-      <span class="status-message" id="statusMessage"></span>
     </div>
 
     <script>
@@ -197,55 +187,15 @@
       // 保存された認証情報を読み込む
       parent.postMessage({ pluginMessage: { type: "load-api-key" } }, "*");
       parent.postMessage({ pluginMessage: { type: "load-figma-token" } }, "*");
-
-      const statusMessageElement = document.getElementById("statusMessage");
-      const setUiLoadingState = (isLoading, message = "") => {
+      const setUiLoadingState = (isLoading) => {
         getReviewButton.disabled = isLoading;
         loader.style.display = isLoading ? "block" : "none";
-        statusMessageElement.textContent = message;
-        statusMessageElement.style.display = message ? "inline" : "none";
       };
 
       getReviewButton.onclick = () => {
         const apiKey = apiKeyInput.value;
         const figmaToken = figmaTokenInput.value;
         const additionalPrompt = additionalPromptInput.value;
-
-        if (!apiKey || !figmaToken) {
-          if (!apiKey && !figmaToken) {
-            parent.postMessage(
-              {
-                pluginMessage: {
-                  type: "error",
-                  error:
-                    "Gemini APIキーとFigmaアクセストークンを入力してください。",
-                },
-              },
-              "*"
-            );
-          } else if (!apiKey) {
-            parent.postMessage(
-              {
-                pluginMessage: {
-                  type: "error",
-                  error: "Gemini APIキーを入力してください。",
-                },
-              },
-              "*"
-            );
-          } else {
-            parent.postMessage(
-              {
-                pluginMessage: {
-                  type: "error",
-                  error: "Figmaアクセストークンを入力してください。",
-                },
-              },
-              "*"
-            );
-          }
-          return;
-        }
 
         setUiLoadingState(true);
 
@@ -273,9 +223,7 @@
         ) {
           figmaTokenInput.value = message.figmaToken;
         } else if (message.type === "loading") {
-          setUiLoadingState(true, message.message || "処理中...");
-        } else if (message.type === "error") {
-          setUiLoadingState(false, message.error);
+          setUiLoadingState(true);
         } else {
           setUiLoadingState(false);
         }
