@@ -17,8 +17,9 @@ type GeminiResponse = {
 
 // Constants
 const INITIAL_PROMPT =
-  "以下のUIデザインをレビューしてください。ユーザビリティ、視覚的な魅力、改善点の可能性についてフィードバックをお願いします。レイアウト、配色、タイポグラフィ、全体的なユーザーエクスペリエンスなどの側面を考慮してください。日本語で回答してください。";
+  "以下のUIデザインをレビューしてください。ユーザビリティ、視覚的な魅力、改善点の可能性についてフィードバックをお願いします。レイアウト、配色、タイポグラフィ、全体的なユーザーエクスペリエンスなどの側面を考慮してください。800文字以内で簡潔に、日本語で回答してください。";
 const GEMINI_MODEL_NAME = "gemini-2.0-flash";
+const STORAGE_API_KEY = "gemini-api-key";
 
 // This shows the HTML page in "ui.html".
 figma.showUI(__html__, { width: 300, height: 400 });
@@ -49,15 +50,28 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 // callback. The callback will be passed the "pluginMessage" property of the
 // posted message.
 figma.ui.onmessage = async (msg: PluginMessage) => {
-  if (msg.type === "get-review") {
+  if (msg.type === "load-api-key") {
+    const savedApiKey = await figma.clientStorage.getAsync(STORAGE_API_KEY);
+    if (savedApiKey) {
+      figma.ui.postMessage({ type: "api-key-loaded", apiKey: savedApiKey });
+    }
+  } else if (msg.type === "get-review") {
     const { apiKey, additionalPrompt } = msg;
     if (!apiKey) {
-      figma.ui.postMessage({
-        type: "error",
-        error:
-          "APIキーが入力されていません。Gemini APIキーを入力してください。",
-      });
-      return;
+      // 保存されたAPIキーを確認
+      const savedApiKey = await figma.clientStorage.getAsync(STORAGE_API_KEY);
+      if (!savedApiKey) {
+        figma.ui.postMessage({
+          type: "error",
+          error:
+            "APIキーが入力されていません。Gemini APIキーを入力してください。",
+        });
+        return;
+      }
+      msg.apiKey = savedApiKey;
+    } else {
+      // APIキーを保存
+      await figma.clientStorage.setAsync(STORAGE_API_KEY, apiKey);
     }
 
     const selection = figma.currentPage.selection;

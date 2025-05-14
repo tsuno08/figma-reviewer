@@ -179,8 +179,9 @@
     const loader = document.getElementById('loader');
     const copyReviewButton = document.getElementById('copyReview');
     const clearResultButton = document.getElementById('clearResult');
-    const additionalPromptHeader = document.getElementById('additionalPromptHeader');
-    const additionalPromptContent = document.getElementById('additionalPromptContent');
+
+    // 保存されたAPIキーを読み込む
+    parent.postMessage({ pluginMessage: { type: 'load-api-key' } }, '*');
 
     const setUiLoadingState = (isLoading) => {
       getReviewButton.disabled = isLoading;
@@ -227,7 +228,9 @@
       const message = event.data.pluginMessage;
       setUiLoadingState(false);
 
-      if (message.type === 'review-result') {
+      if (message.type === 'api-key-loaded' && message.apiKey) {
+        apiKeyInput.value = message.apiKey;
+      } else if (message.type === 'review-result') {
         resultDiv.innerHTML = `<p><strong>レビュー結果:</strong></p><pre class="review-content">${message.review}</pre>`;
         copyReviewButton.style.display = 'inline-block';
         clearResultButton.style.display = 'inline-block';
@@ -236,8 +239,8 @@
         copyReviewButton.style.display = 'none';
         clearResultButton.style.display = 'none';
       } else if (message.type === 'loading') {
-         resultDiv.innerHTML = `<p>${message.message || '処理中...'}</p>`;
-         setUiLoadingState(true);
+        resultDiv.innerHTML = `<p>${message.message || '処理中...'}</p>`;
+        setUiLoadingState(true);
       }
     };
   </script>
