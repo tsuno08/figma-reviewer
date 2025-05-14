@@ -18,13 +18,21 @@ type GeminiResponse = {
 
 // Constants
 const INITIAL_PROMPT =
-  "以下のUIデザインをレビューしてください。ユーザビリティ、視覚的な魅力、改善点の可能性についてフィードバックをお願いします。レイアウト、配色、タイポグラフィ、全体的なユーザーエクスペリエンスなどの側面を考慮してください。800文字以内で簡潔に、日本語で回答してください。";
+  "以下のUIデザインをレビューしてください。ユーザビリティ、視覚的な魅力、改善点の可能性についてフィードバックをお願いします。レイアウト、配色、タイポグラフィ、全体的なユーザーエクスペリエンスなどの側面を考慮してください。800文字以内で簡潔に、日本語で回答してください。\n\n回答の形式について：\n- 見出しには '#' を使用可能です\n- 箇条書きには '-' を使用可能です\n- 太字、斜体、コードブロックなどの装飾的な記法の使用は避けてください";
 const GEMINI_MODEL_NAME = "gemini-2.0-flash";
 const STORAGE_API_KEY = "gemini-api-key";
 const STORAGE_FIGMA_TOKEN = "figma-token";
 
 // This shows the HTML page in "ui.html".
 figma.showUI(__html__, { width: 300, height: 400 });
+
+// レビューテキストのクリーンアップ
+function cleanReviewText(text: string): string {
+  return text
+    .replace(/[`*_~>]/g, "") // 装飾的なMarkdown記法のみを除去（#や-は構造化のために残す）
+    .replace(/\n{3,}/g, "\n\n") // 過剰な改行を2行までに制限
+    .trim(); // 前後の余分な空白を除去
+}
 
 // Base64エンコーディングのヘルパー関数
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
@@ -178,7 +186,11 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
       }
 
       const result = (await response.json()) as GeminiResponse;
-      const reviewText = result.candidates[0].content.parts[0].text;
+      // レビューテキストから装飾を削除し、プレーンテキストに変換
+      const rawReviewText = result.candidates[0].content.parts[0].text
+        .replace(/[`*_#]/g, "") // マークダウン記法の削除
+        .replace(/\n\n+/g, "\n\n") // 過剰な改行の削除
+        .trim();
 
       // Figmaのアクセストークンを取得
       const figmaToken = await figma.clientStorage.getAsync(
@@ -201,12 +213,12 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            message: reviewText,
+            message: cleanReviewText(rawReviewText),
             client_meta: {
               node_id: selectedFrame.id,
-              node_offset: { x: 0, y: 0 }
+              node_offset: { x: 0, y: 0 },
             },
-            pinned_node: selectedFrame.id
+            pinned_node: selectedFrame.id,
           }),
         }
       );
