@@ -203,16 +203,10 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
           body: JSON.stringify({
             message: reviewText,
             client_meta: {
-              x: selectedFrame.x,
-              y: selectedFrame.y,
               node_id: selectedFrame.id,
-              node_offset: { x: 0, y: -50 },
+              node_offset: { x: 0, y: 0 }
             },
-            comment_pin: {
-              node_id: selectedFrame.id,
-              x: 0.5,
-              y: 0,
-            },
+            pinned_node: selectedFrame.id
           }),
         }
       );
