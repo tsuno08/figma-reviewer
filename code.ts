@@ -34,6 +34,48 @@ function cleanReviewText(text: string): string {
     .trim(); // 前後の余分な空白を除去
 }
 
+// Gemini APIへのリクエストとリトライ処理
+async function requestGeminiAPI(
+  apiKey: string,
+  requestBody: any,
+  retryCount = 0
+): Promise<GeminiResponse> {
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_NAME}:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      }
+    );
+
+    if (response.status === 503 && retryCount < 3) {
+      // 503エラーの場合は少し待ってリトライ
+      const waitTime = Math.pow(2, retryCount) * 1000; // 1秒、2秒、4秒と待ち時間を増やす
+      figma.ui.postMessage({
+        type: "loading",
+        message: `サーバーが混雑しています。${waitTime / 1000}秒後に再試行します...`,
+      });
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
+      return requestGeminiAPI(apiKey, requestBody, retryCount + 1);
+    }
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return (await response.json()) as GeminiResponse;
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error("APIリクエストに失敗しました");
+  }
+}
+
 // Calls to "parent.postMessage" from within the HTML page will trigger this
 // callback. The callback will be passed the "pluginMessage" property of the
 // posted message.
@@ -56,9 +98,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
     if (!apiKey || !figmaToken) {
       // 保存されたAPIキーを確認
       const savedApiKey = await figma.clientStorage.getAsync(STORAGE_API_KEY);
-      const savedToken = await figma.clientStorage.getAsync(
-        STORAGE_FIGMA_TOKEN
-      );
+      const savedToken = await figma.clientStorage.getAsync(STORAGE_FIGMA_TOKEN);
       if (!savedApiKey || !savedToken) {
         figma.ui.postMessage({
           type: "error",
@@ -84,16 +124,14 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
     if (selection.length === 0) {
       figma.ui.postMessage({
         type: "error",
-        error:
-          "フレームが選択されていません。レビューするフレーム、コンポーネント、またはインスタンスを選択してください。",
+        error: "フレームが選択されていません。レビューするフレーム、コンポーネント、またはインスタンスを選択してください。",
       });
       return;
     }
     if (selection.length > 1) {
       figma.ui.postMessage({
         type: "error",
-        error:
-          "複数のフレームが選択されています。レビューするフレーム、コンポーネント、またはインスタンスを1つだけ選択してください。",
+        error: "複数のフレームが選択されています。レビューするフレーム、コンポーネント、またはインスタンスを1つだけ選択してください。",
       });
       return;
     }
@@ -107,8 +145,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
     ) {
       figma.ui.postMessage({
         type: "error",
-        error:
-          "選択が無効です。フレーム、コンポーネント、またはインスタンスを選択してください。",
+        error: "選択が無効です。フレーム、コンポーネント、またはインスタンスを選択してください。",
       });
       return;
     }
@@ -148,35 +185,10 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
         ],
       };
 
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_NAME}:generateContent?key=${apiKey}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(requestBody),
-        }
-      );
+      const result = await requestGeminiAPI(msg.apiKey!, requestBody);
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = (await response.json()) as GeminiResponse;
       // レビューテキストから装飾を削除し、プレーンテキストに変換
-      const rawReviewText = result.candidates[0].content.parts[0].text
-        .replace(/[`*_#]/g, "") // マークダウン記法の削除
-        .replace(/\n\n+/g, "\n\n") // 過剰な改行の削除
-        .trim();
-
-      // Figmaのアクセストークンを取得
-      const figmaToken = await figma.clientStorage.getAsync(
-        STORAGE_FIGMA_TOKEN
-      );
-      if (!figmaToken) {
-        throw new Error("Figmaのアクセストークンが設定されていません。");
-      }
+      const rawReviewText = result.candidates[0].content.parts[0].text;
 
       // レビューをコメントとして追加
       figma.notify("レビューを追加しています...");
@@ -187,32 +199,29 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
         {
           method: "POST",
           headers: {
-            "X-FIGMA-TOKEN": figmaToken,
+            "X-FIGMA-TOKEN": msg.figmaToken!, // Non-null assertion operatorを使用
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
             message: cleanReviewText(rawReviewText),
             client_meta: {
               node_id: selectedFrame.id,
-              node_offset: { x: 0, y: 0 },
+              node_offset: { x: 0, y: 0 }
             },
-            pinned_node: selectedFrame.id,
+            pinned_node: selectedFrame.id
           }),
         }
       );
 
       if (!commentResponse.ok) {
-        throw new Error(
-          `コメントの追加に失敗しました: ${commentResponse.status}`
-        );
+        throw new Error(`コメントの追加に失敗しました: ${commentResponse.status}`);
       }
 
       figma.notify("レビューをコメントとして追加しました");
       figma.closePlugin();
     } catch (error) {
       console.error("レビュー取得エラー:", error);
-      let errorMessage =
-        "レビューの取得に失敗しました。APIキーとネットワーク接続を確認してください。";
+      let errorMessage = "レビューの取得に失敗しました。APIキーとネットワーク接続を確認してください。";
       if (error instanceof Error) {
         errorMessage = error.message;
       }

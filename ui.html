@@ -163,7 +163,9 @@
 
       // アコーディオンの動作を設定
       const accordionHeader = document.getElementById("additionalPromptHeader");
-      const accordionContent = document.getElementById("additionalPromptContent");
+      const accordionContent = document.getElementById(
+        "additionalPromptContent"
+      );
 
       accordionHeader.addEventListener("click", () => {
         accordionHeader.classList.toggle("active");
