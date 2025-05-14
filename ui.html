@@ -224,7 +224,7 @@
           figmaTokenInput.value = message.figmaToken;
         } else if (message.type === "loading") {
           setUiLoadingState(true);
-        } else {
+        } else if (message.type === "finished") {
           setUiLoadingState(false);
         }
       };

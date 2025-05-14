@@ -108,6 +108,9 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
               ? "APIキーが入力されていません。"
               : "Figmaトークンが入力されていません。"
           );
+          figma.ui.postMessage({
+            type: "finished",
+          });
           return;
         }
         msg.apiKey = savedApiKey;
@@ -124,10 +127,16 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
         figma.notify(
           "フレーム、コンポーネント、またはインスタンスを選択してください。"
         );
+        figma.ui.postMessage({
+          type: "finished",
+        });
         return;
       }
       if (selection.length > 1) {
         figma.notify("1つだけ選択してください。");
+        figma.ui.postMessage({
+          type: "finished",
+        });
         return;
       }
 
@@ -141,6 +150,9 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
         figma.notify(
           "フレーム、コンポーネント、またはインスタンスを選択してください。"
         );
+        figma.ui.postMessage({
+          type: "finished",
+        });
         return;
       }
 
@@ -185,6 +197,9 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
           result.candidates[0].content.parts.length === 0
         ) {
           figma.notify("レビューの取得に失敗しました。");
+          figma.ui.postMessage({
+            type: "finished",
+          });
           return;
         }
 
@@ -217,6 +232,9 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
           figma.notify(
             `コメントの追加に失敗しました: ${commentResponse.status}`
           );
+          figma.ui.postMessage({
+            type: "finished",
+          });
           return;
         }
 
@@ -229,6 +247,9 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
           errorMessage = error.message;
         }
         figma.notify(errorMessage);
+        figma.ui.postMessage({
+          type: "finished",
+        });
       }
   }
 };
