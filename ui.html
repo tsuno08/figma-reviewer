@@ -119,9 +119,9 @@
     </style>
   </head>
   <body>
-    <h2>UIレビューアー</h2>
+    <h2>figma-reviewer</h2>
     <p class="description">
-      Figmaでフレームを選択し、APIキーを入力して「レビューを取得」をクリックしてください。
+      Figmaでフレームを選択し、APIキー、Figmaアクセストークンを入力して「レビューを取得」をクリックしてください。
     </p>
 
     <label for="apiKey">Gemini APIキー:</label>
@@ -160,6 +160,15 @@
       const additionalPromptInput = document.getElementById("additionalPrompt");
       const getReviewButton = document.getElementById("getReview");
       const loader = document.getElementById("loader");
+
+      // アコーディオンの動作を設定
+      const accordionHeader = document.getElementById("additionalPromptHeader");
+      const accordionContent = document.getElementById("additionalPromptContent");
+
+      accordionHeader.addEventListener("click", () => {
+        accordionHeader.classList.toggle("active");
+        accordionContent.classList.toggle("show");
+      });
 
       // 保存された認証情報を読み込む
       parent.postMessage({ pluginMessage: { type: "load-api-key" } }, "*");
