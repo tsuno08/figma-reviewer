@@ -151,6 +151,9 @@
   <label for="apiKey">Gemini APIキー:</label>
   <input type="password" id="apiKey" placeholder="Gemini APIキーを入力してください">
 
+  <label for="figmaToken">Figmaアクセストークン:</label>
+  <input type="password" id="figmaToken" placeholder="Figmaのアクセストークンを入力してください">
+
   <div class="accordion">
     <div class="accordion-header" id="additionalPromptHeader">
       <span>追加の指示（任意）</span>
@@ -173,6 +176,7 @@
 
   <script>
     const apiKeyInput = document.getElementById('apiKey');
+    const figmaTokenInput = document.getElementById('figmaToken');
     const additionalPromptInput = document.getElementById('additionalPrompt');
     const getReviewButton = document.getElementById('getReview');
     const resultDiv = document.getElementById('result');
@@ -180,41 +184,60 @@
     const copyReviewButton = document.getElementById('copyReview');
     const clearResultButton = document.getElementById('clearResult');
 
-    // 保存されたAPIキーを読み込む
+    // 保存された認証情報を読み込む
     parent.postMessage({ pluginMessage: { type: 'load-api-key' } }, '*');
+    parent.postMessage({ pluginMessage: { type: 'load-figma-token' } }, '*');
 
     const setUiLoadingState = (isLoading) => {
       getReviewButton.disabled = isLoading;
       loader.style.display = isLoading ? 'block' : 'none';
     };
 
-    additionalPromptHeader.onclick = () => {
-      additionalPromptHeader.classList.toggle('active');
-      additionalPromptContent.classList.toggle('show');
-    };
-
     getReviewButton.onclick = () => {
       const apiKey = apiKeyInput.value;
+      const figmaToken = figmaTokenInput.value;
       const additionalPrompt = additionalPromptInput.value;
-      if (!apiKey) {
-        resultDiv.innerHTML = '<p class="error-message">Gemini APIキーを入力してください。</p>';
-        apiKeyInput.style.borderColor = '#dc3545';
+      
+      if (!apiKey || !figmaToken) {
+        let errorMessage = '';
+        if (!apiKey && !figmaToken) {
+          errorMessage = 'Gemini APIキーとFigmaアクセストークンを入力してください。';
+          apiKeyInput.style.borderColor = '#dc3545';
+          figmaTokenInput.style.borderColor = '#dc3545';
+        } else if (!apiKey) {
+          errorMessage = 'Gemini APIキーを入力してください。';
+          apiKeyInput.style.borderColor = '#dc3545';
+        } else {
+          errorMessage = 'Figmaアクセストークンを入力してください。';
+          figmaTokenInput.style.borderColor = '#dc3545';
+        }
+        resultDiv.innerHTML = `<p class="error-message">${errorMessage}</p>`;
         return;
       }
+      
       apiKeyInput.style.borderColor = '';
+      figmaTokenInput.style.borderColor = '';
       setUiLoadingState(true);
       resultDiv.innerHTML = '<p>レビューを取得しています...</p>';
       copyReviewButton.style.display = 'none';
       clearResultButton.style.display = 'none';
-      parent.postMessage({ pluginMessage: { type: 'get-review', apiKey: apiKey, additionalPrompt: additionalPrompt } }, '*');
+      
+      parent.postMessage({
+        pluginMessage: {
+          type: 'get-review',
+          apiKey,
+          figmaToken,
+          additionalPrompt
+        }
+      }, '*');
     };
 
     copyReviewButton.onclick = () => {
       const reviewText = resultDiv.querySelector('pre')?.innerText;
       if (reviewText) {
         navigator.clipboard.writeText(reviewText)
-          .then(() => { alert('レビューをクリップボードにコピーしました！'); })
-          .catch(err => { console.error('コピーに失敗しました: ', err); alert('レビューのコピーに失敗しました。'); });
+          .then(() => { alert('レビューをコピーしました！'); })
+          .catch(err => { console.error('コピーに失敗しました: ', err); alert('コピーに失敗しました。'); });
       }
     };
 
@@ -230,6 +253,8 @@
 
       if (message.type === 'api-key-loaded' && message.apiKey) {
         apiKeyInput.value = message.apiKey;
+      } else if (message.type === 'figma-token-loaded' && message.figmaToken) {
+        figmaTokenInput.value = message.figmaToken;
       } else if (message.type === 'review-result') {
         resultDiv.innerHTML = `<p><strong>レビュー結果:</strong></p><pre class="review-content">${message.review}</pre>`;
         copyReviewButton.style.display = 'inline-block';
