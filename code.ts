@@ -146,7 +146,13 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
       const result = (await response.json()) as GeminiResponse;
       const reviewText = result.candidates[0].content.parts[0].text;
 
-      figma.ui.postMessage({ type: "review-result", review: reviewText });
+      // レビューをコメントとして追加
+      figma.notify("レビューを追加しています...");
+      selectedFrame.setRelaunchData({ comment: reviewText });
+      figma.currentPage.setRelaunchData({ hasComments: "true" });
+
+      figma.notify("レビューをコメントとして追加しました");
+      figma.closePlugin();
     } catch (error) {
       console.error("レビュー取得エラー:", error);
       let errorMessage =
